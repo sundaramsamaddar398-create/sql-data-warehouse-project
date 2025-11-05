@@ -12,9 +12,10 @@ WARNING:
     and ensure you have proper backups before running this script.
 */
 
+-- Delete database 'data_warehouse' if it is already present
 Drop Database If Exists data_warehouse;
 
--- Create the Database 'data_warehouse' 
+-- Create the database 'data_warehouse' 
 Create Database data_warehouse;
 
 Use data_warehouse;
