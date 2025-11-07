@@ -31,7 +31,7 @@ SELECT 'Loading bronze_crm_cust_info...' AS status;
 
 -- Load Fresh Data into the table
 -- preliminary data validation for null 
--- Conditions of null for each column if the original source has empty cells (int, str, datetime)
+-- Conditions of null for each column (int, str, datetime)
 LOAD DATA INFILE 'C:/ProgramData/MySQL/MySQL Server 8.0/Uploads/cust_info.csv'
 INTO TABLE bronze_crm_cust_info
 FIELDS TERMINATED BY ',' 
@@ -46,8 +46,12 @@ SET
   cst_lastname       = NULLIF(@cst_lastname, ''),
   cst_marital_status = NULLIF(@cst_marital_status, ''),
   cst_gndr           = NULLIF(@cst_gndr, ''),
-  cst_create_date    = IF(@cst_create_date = '', NULL, STR_TO_DATE(@cst_create_date, '%Y-%m-%d'))
+  cst_create_date    = CASE
+                         WHEN TRIM(REPLACE(@cst_create_date, CHAR(13), '')) IN ('', '0000-00-00') THEN NULL
+                         ELSE STR_TO_DATE(TRIM(REPLACE(@cst_create_date, CHAR(13), '')), '%Y-%m-%d')
+                       END
 ;
+
 
 SELECT 'bronze_crm_cust_info loaded' AS status,
        COUNT(*) AS row_count
@@ -71,8 +75,16 @@ SET
   prd_nm       = NULLIF(@prd_nm, ''),
   prd_cost     = CASE WHEN TRIM(@prd_cost) REGEXP '^[0-9]+(\\.[0-9]+)?$' THEN TRIM(@prd_cost) ELSE NULL END,
   prd_line     = NULLIF(@prd_line, ''),
-  prd_start_dt = IF(@prd_start_dt = '', NULL, STR_TO_DATE(@prd_start_dt, '%Y-%m-%d')),
-  prd_end_dt   = IF(@prd_end_dt = '', NULL, STR_TO_DATE(@prd_end_dt, '%Y-%m-%d'))
+  prd_start_dt = CASE
+                         WHEN TRIM(REPLACE(@prd_start_dt, CHAR(13), '')) IN ('', '0000-00-00') THEN NULL
+                         ELSE STR_TO_DATE(TRIM(REPLACE(@prd_start_dt, CHAR(13), '')), '%Y-%m-%d')
+                       END
+,
+  prd_end_dt   = CASE
+                         WHEN TRIM(REPLACE(@prd_end_dt, CHAR(13), '')) IN ('', '0000-00-00') THEN NULL
+                         ELSE STR_TO_DATE(TRIM(REPLACE(@prd_end_dt, CHAR(13), '')), '%Y-%m-%d')
+                       END
+
 ;
 
 SELECT 'bronze_crm_prd_info loaded' AS status,
@@ -197,3 +209,6 @@ UNION ALL
 SELECT 'bronze_erp_cust_az12', COUNT(*) AS `rows` FROM bronze_erp_CUST_AZ12
 UNION ALL
 SELECT 'bronze_erp_px_cat_g1v2', COUNT(*) AS `rows` FROM bronze_erp_PX_CAT_G1V2;
+
+
+
