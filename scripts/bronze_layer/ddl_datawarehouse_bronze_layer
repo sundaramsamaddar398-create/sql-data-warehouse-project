@@ -3,12 +3,13 @@
 DDL Script: Create Bronze Tables
 ============================================================================================================
 Script Purpose:
-    This script creates tables for the 'bronze_layer' in 'data_warehouse' database, dropping existing tables 
+    This script creates tables for the 'bronze' layer in 'data_warehouse' database, dropping existing tables 
     if they already exist.
 	  Run this script to re-define the DDL structure of 'bronze' Tables
 ============================================================================================================
 */
 
+USE data_warehouse;
 -- Bronze Layer Tables
 
 -- Drop the table if it already exist with its previous records
