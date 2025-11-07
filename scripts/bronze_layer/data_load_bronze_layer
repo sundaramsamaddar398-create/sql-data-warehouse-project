@@ -1,0 +1,199 @@
+--===============================================================================
+-- Script: Load Bronze Layer (Source -> Bronze)
+--===============================================================================
+-- Purpose:
+--     Loads data into the 'data_warehouse' database from external CSV files.
+--     - Truncates bronze tables before loading.
+--     - Uses LOAD DATA INFILE to bulk load CSVs.
+--     - Treats empty fields as NULL using SET clause.
+--
+-- Usage:
+--     Run this script directly in MySQL client or via VS Code SQL extension.
+--===============================================================================
+
+USE data_warehouse;
+
+-- MySQL Doesn't Allow Load Data infile in stored procedure hence for next batch we can run the same file to load
+
+-- -------------------------------------------------------------------------
+-- CRM Tables
+-- -------------------------------------------------------------------------
+
+-- -------------------------------------------------------------------------
+SET @load_start = NOW();
+SELECT @load_start AS load_start_time;
+-- start time
+
+-- Delete the Previous records in the table
+TRUNCATE TABLE bronze_crm_cust_info;
+
+SELECT 'Loading bronze_crm_cust_info...' AS status;
+
+-- Load Fresh Data into the table
+-- preliminary data validation for null 
+-- Conditions of null for each column if the original source has empty cells (int, str, datetime)
+LOAD DATA INFILE 'C:/ProgramData/MySQL/MySQL Server 8.0/Uploads/cust_info.csv'
+INTO TABLE bronze_crm_cust_info
+FIELDS TERMINATED BY ',' 
+IGNORE 1 ROWS
+
+(@cst_id, @cst_key, @cst_firstname, @cst_lastname, @cst_marital_status, @cst_gndr, @cst_create_date)
+SET
+
+  cst_id             = CASE WHEN TRIM(@cst_id) REGEXP '^[0-9]+$' THEN TRIM(@cst_id) ELSE NULL END, 
+  cst_key            = NULLIF(@cst_key, ''),
+  cst_firstname      = NULLIF(@cst_firstname, ''),
+  cst_lastname       = NULLIF(@cst_lastname, ''),
+  cst_marital_status = NULLIF(@cst_marital_status, ''),
+  cst_gndr           = NULLIF(@cst_gndr, ''),
+  cst_create_date    = IF(@cst_create_date = '', NULL, STR_TO_DATE(@cst_create_date, '%Y-%m-%d'))
+;
+
+SELECT 'bronze_crm_cust_info loaded' AS status,
+       COUNT(*) AS row_count
+FROM bronze_crm_cust_info;
+-- --------------------------------------------------------------------------
+
+-- --------------------------------------------------------------------------
+-- Delete the Previous records in the table
+TRUNCATE TABLE bronze_crm_prd_info;
+
+SELECT 'Loading bronze_crm_prd_info...' AS status;   
+-- Load Fresh Data into the table
+LOAD DATA INFILE 'C:/ProgramData/MySQL/MySQL Server 8.0/Uploads/prd_info.csv'
+INTO TABLE bronze_crm_prd_info
+FIELDS TERMINATED BY ',' 
+IGNORE 1 ROWS
+(@prd_id, @prd_key, @prd_nm, @prd_cost, @prd_line, @prd_start_dt, @prd_end_dt)
+SET
+  prd_id       = CASE WHEN TRIM(@prd_id) REGEXP '^[0-9]+$' THEN TRIM(@prd_id) ELSE NULL END,
+  prd_key      = NULLIF(@prd_key, ''),
+  prd_nm       = NULLIF(@prd_nm, ''),
+  prd_cost     = CASE WHEN TRIM(@prd_cost) REGEXP '^[0-9]+(\\.[0-9]+)?$' THEN TRIM(@prd_cost) ELSE NULL END,
+  prd_line     = NULLIF(@prd_line, ''),
+  prd_start_dt = IF(@prd_start_dt = '', NULL, STR_TO_DATE(@prd_start_dt, '%Y-%m-%d')),
+  prd_end_dt   = IF(@prd_end_dt = '', NULL, STR_TO_DATE(@prd_end_dt, '%Y-%m-%d'))
+;
+
+SELECT 'bronze_crm_prd_info loaded' AS status,
+       COUNT(*) AS row_count
+FROM bronze_crm_prd_info;
+-- ---------------------------------------------------------------------------
+
+-- ---------------------------------------------------------------------------
+-- Delete the Previous records in the table
+TRUNCATE TABLE bronze_crm_sales_details;
+
+SELECT 'Loading bronze_crm_sales_details...' AS status;   
+-- Load Fresh Data into the table
+LOAD DATA INFILE 'C:/ProgramData/MySQL/MySQL Server 8.0/Uploads/sales_details.csv'
+INTO TABLE bronze_crm_sales_details
+FIELDS TERMINATED BY ',' 
+IGNORE 1 ROWS
+(@sls_ord_num, @sls_prd_key, @sls_cust_id, @sls_order_dt, @sls_ship_dt, @sls_due_dt, @sls_sales, @sls_quantity, @sls_price)
+SET
+  sls_ord_num  = NULLIF(@sls_ord_num, ''),
+  sls_prd_key  = NULLIF(@sls_prd_key, ''),
+  sls_cust_id  = CASE WHEN TRIM(@sls_cust_id) REGEXP '^[0-9]+$' THEN TRIM(@sls_cust_id) ELSE NULL END,
+  sls_order_dt = NULLIF(@sls_order_dt, ''),
+  sls_ship_dt  = NULLIF(@sls_ship_dt, ''),
+  sls_due_dt   = NULLIF(@sls_due_dt, ''),
+  sls_sales    = CASE WHEN TRIM(@sls_sales) REGEXP '^[0-9]+(\\.[0-9]+)?$' THEN TRIM(@sls_sales) ELSE NULL END,
+  sls_quantity = CASE WHEN TRIM(@sls_quantity) REGEXP '^[0-9]+$' THEN TRIM(@sls_quantity) ELSE NULL END,
+  sls_price    = CASE WHEN TRIM(@sls_price) REGEXP '^[0-9]+(\\.[0-9]+)?$' THEN TRIM(@sls_price) ELSE NULL END
+;
+
+SELECT 'bronze_crm_sales_details loaded' AS status,
+       COUNT(*) AS row_count
+FROM bronze_crm_sales_details;
+-- -------------------------------------------------------------------------------
+
+
+-- -------------------------------------------------------------------------------
+-- ERP Tables
+-- -------------------------------------------------------------------------------
+
+
+-- -------------------------------------------------------------------------------
+-- Delete the Previous records in the table
+TRUNCATE TABLE bronze_erp_loc_a101;
+
+SELECT 'Loading bronze_erp_loc_a101...' AS status;   
+-- Load Fresh Data into the table
+LOAD DATA INFILE 'C:/ProgramData/MySQL/MySQL Server 8.0/Uploads/LOC_A101.csv'
+INTO TABLE bronze_erp_LOC_A101
+FIELDS TERMINATED BY ',' 
+IGNORE 1 ROWS
+(@CID, @CNTRY)
+SET
+  CID   = NULLIF(@CID, ''),
+  CNTRY = NULLIF(@CNTRY, '')
+;
+
+SELECT 'bronze_erp_loc_a101 loaded' AS status,
+       COUNT(*) AS row_count
+FROM bronze_erp_loc_a101;
+-- --------------------------------------------------------------------------------
+
+-- --------------------------------------------------------------------------------
+-- Delete the Previous records in the table
+TRUNCATE TABLE bronze_erp_cust_az12;
+
+SELECT 'Loading bronze_erp_cust_az12...' AS status;   
+-- Load Fresh Data into the table
+LOAD DATA INFILE 'C:/ProgramData/MySQL/MySQL Server 8.0/Uploads/CUST_AZ12.csv'
+INTO TABLE bronze_erp_CUST_AZ12
+FIELDS TERMINATED BY ',' 
+IGNORE 1 ROWS
+(@CID, @BDATE, @GEN)
+SET
+  CID   = NULLIF(@CID, ''),
+  BDATE = IF(@BDATE = '', NULL, STR_TO_DATE(@BDATE, '%Y-%m-%d')),
+  GEN   = NULLIF(@GEN, '')
+;
+
+SELECT 'bronze_erp_cust_az12 loaded' AS status,
+       COUNT(*) AS row_count
+FROM bronze_erp_cust_az12;
+-- ---------------------------------------------------------------------------------
+
+-- ---------------------------------------------------------------------------------
+-- Delete the Previous records in the table
+TRUNCATE TABLE bronze_erp_px_cat_g1v2;
+
+SELECT 'Loading bronze_px_cat_g1v2...' AS status;
+-- Load Fresh Data into the table
+LOAD DATA INFILE 'C:/ProgramData/MySQL/MySQL Server 8.0/Uploads/PX_CAT_G1V2.csv'
+INTO TABLE bronze_erp_PX_CAT_G1V2
+FIELDS TERMINATED BY ',' 
+IGNORE 1 ROWS
+(@ID, @CAT, @SUBCAT, @MANTAINANCE)
+SET
+  ID          = NULLIF(@ID, ''),
+  CAT         = NULLIF(@CAT, ''),
+  SUBCAT      = NULLIF(@SUBCAT, ''),
+  MANTAINANCE = NULLIF(@MANTAINANCE, '')
+;
+
+SELECT 'bronze_erp_px_cat_g1v2 loaded' AS status,
+       COUNT(*) AS row_count
+FROM bronze_erp_px_cat_g1v2;
+-- -----------------------------------------------------------------------------------
+
+SET @load_end = NOW();
+SELECT @load_end AS load_end_time;
+-- End time
+
+SELECT CONCAT("Duration:", TIMESTAMPDIFF(SECOND, @load_start, @load_end), "Seconds");
+
+SELECT 'bronze_crm_cust_info' AS table_name, COUNT(*) AS `rows` FROM bronze_crm_cust_info
+UNION ALL
+SELECT 'bronze_crm_prd_info', COUNT(*) AS `rows` FROM bronze_crm_prd_info
+UNION ALL
+SELECT 'bronze_crm_sales_details', COUNT(*) AS `rows` FROM bronze_crm_sales_details
+UNION ALL
+SELECT 'bronze_erp_loc_a101', COUNT(*) AS `rows` FROM bronze_erp_LOC_A101
+UNION ALL
+SELECT 'bronze_erp_cust_az12', COUNT(*) AS `rows` FROM bronze_erp_CUST_AZ12
+UNION ALL
+SELECT 'bronze_erp_px_cat_g1v2', COUNT(*) AS `rows` FROM bronze_erp_PX_CAT_G1V2;
