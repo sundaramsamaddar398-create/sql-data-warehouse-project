@@ -1,0 +1,111 @@
+/*
+===============================================================================
+DDL Script: Create Gold Views
+===============================================================================
+Script Purpose:
+    This script creates views for the Gold layer in the 'data_warehouse' Database. 
+    The Gold layer represents the final dimension and fact tables (Star Schema)
+
+    Each view performs transformations and combines data from the Silver layer 
+    to produce a clean, enriched, and business-ready dataset.
+
+Usage:
+    - These views can be queried directly for analytics and reporting.
+===============================================================================
+*/
+
+-- ----------------------------------------------------------------------------
+-- Create Dimension: gold_dim_customers
+-- ----------------------------------------------------------------------------
+
+-- Deleting the previous view table
+DROP VIEW IF EXISTS gold_dim_customers;
+
+-- Create View
+CREATE VIEW gold_dim_customers AS
+-- Data from the silver layer table has been integrated and modified as pe bussiness purpose
+-- User friendly column names provided
+-- All the information from different tables joined as one
+
+SELECT
+    ROW_NUMBER() OVER (ORDER BY ci.cst_id) AS customer_key, -- Surrogate Key Added
+    ci.cst_id AS customer_id,
+    ci.cst_key AS customer_number,
+    ci.cst_firstname AS first_name,
+    ci.cst_lastname As last_name,
+    cl.cntry As country,
+    ci.cst_marital_status As marital_status,
+    CASE
+        WHEN ci.cst_gndr != 'N/A' THEN ci.cst_gndr -- CRM is the Master Data
+        ELSE COALESCE(ca.gen, 'N/A') -- Fallback to ERP data
+    END AS gender,
+    ca.bdate As birth_date,
+    ci.cst_create_date AS create_date    
+FROM silver_crm_cust_info AS ci
+LEFT JOIN silver_erp_cust_az12 AS ca 
+ON ci.cst_key = ca.cid
+LEFT JOIN silver_erp_loc_a101 AS cl 
+ON ci.cst_key = cl.cid;
+
+
+
+-- ----------------------------------------------------------------------------
+-- Create Dimension: gold_dim_products
+-- ----------------------------------------------------------------------------
+
+-- Deleting the previous view table
+DROP VIEW IF EXISTS gold_dim_products;
+
+-- Create View
+CREATE VIEW gold_dim_products AS
+-- Data from the silver layer table has been integrated and modified as pe bussiness purpose
+-- User friendly column names provided
+-- All the information from different tables joined as one
+
+SELECT
+    ROW_NUMBER() OVER (ORDER BY pn.prd_start_dt, pn.prd_key) AS product_key, -- Surrogate key
+    pn.prd_id AS product_id,
+    pn.prd_key AS product_number,
+    pn.prd_nm AS product_name,
+    pn.cat_id AS category_id,
+    pc.cat AS category,
+    pc.subcat AS subcategory,
+    pc.mantainance AS maintenance,
+    pn.prd_cost AS cost,
+    pn.prd_line AS product_line,
+    pn.prd_start_dt AS start_date
+FROM silver_crm_prd_info AS pn
+LEFT JOIN silver_erp_px_cat_g1v2 AS pc
+ON pn.cat_id = pc.id
+WHERE pn.prd_end_dt IS NULL; -- Filter out historical data
+
+
+
+-- ----------------------------------------------------------------------------
+-- Create Dimension: gold_fact_sales
+-- ----------------------------------------------------------------------------
+
+-- Deleting the previous view table
+DROP VIEW IF EXISTS gold_fact_sales;
+
+-- Create View
+CREATE VIEW gold_fact_sales AS
+-- Data from the silver layer table has been integrated and modified as pe bussiness purpose
+-- User friendly column names provided
+-- All the information from different tables joined as one
+
+SELECT
+    sd.sls_ord_num  AS order_number,
+    dp.product_key  AS product_key, -- dim_products surrogate key introduced
+    dc.customer_key AS customer_key, -- dim_products surrogate key introduced
+    sd.sls_order_dt AS order_date,
+    sd.sls_ship_dt  AS shipping_date,
+    sd.sls_due_dt   AS due_date,
+    sd.sls_sales    AS sales_amount,
+    sd.sls_quantity AS quantity,
+    sd.sls_price    AS price
+FROM silver_crm_sales_details AS sd
+LEFT JOIN gold_dim_customers AS dc
+ON sd.sls_cust_id = dc.customer_id
+LEFT JOIN gold_dim_products AS dp
+ON sd.sls_prd_key = dp.product_number;
