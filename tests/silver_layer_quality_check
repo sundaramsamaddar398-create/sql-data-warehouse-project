@@ -1,0 +1,191 @@
+/*
+===============================================================================
+Quality Checks
+===============================================================================
+Script Purpose:
+    This script performs various quality checks for data consistency, accuracy, 
+    and standardization across the 'silver' layer. It includes checks for:
+    - Null or duplicate primary keys.
+    - Unwanted spaces in string fields.
+    - Data standardization and consistency.
+    - Invalid date ranges and orders.
+    - Data consistency between related fields.
+
+Usage Notes:
+    - Run these checks after data loading Silver Layer.
+    - Investigate and resolve any discrepancies found during the checks.
+===============================================================================
+*/
+
+-- ------------------------------------------
+-- Checking 'sliver_crm_cust_info'
+-- ------------------------------------------
+
+-- Check for Nulls or Duplicates
+Select 
+    cst_id,
+    Count(*)
+From silver_crm_cust_info
+Group By cst_id
+Having Count(*) > 1 Or cst_id IS NULL;
+
+
+-- Check for Unwanted Space
+Select
+    cst_key
+From silver_crm_cust_info
+Where cst_key != Trim(cst_key);
+
+
+-- Data Consistancy and Standardization
+Select Distinct 
+    cst_marital_status
+From silver_crm_cust_info;
+
+-- Final Check to the data
+Select * From silver_crm_cust_info;
+
+
+-- ------------------------------------------
+-- Checking 'sliver_crm_prd_info'
+-- ------------------------------------------
+
+-- Check for Nulls or Duplicates
+Select 
+    prd_id,
+    Count(*)
+From silver_crm_prd_info
+Group By prd_id
+Having Count(*) > 1 Or prd_id Is Null;
+
+
+-- Check for Unwanted Space
+Select
+    prd_nm
+From silver_crm_prd_info
+Where prd_nm != Trim(prd_nm);
+
+
+-- Check for NULLs or Negative Values in Cost
+Select 
+    prd_cost
+From silver_crm_prd_info
+Where prd_cost < 0 Or prd_cost Is Null
+
+
+-- Data Standardization & Consistency
+Select Distinct 
+    prd_line 
+From silver_crm_prd_info;
+
+
+-- Check for Invalid Date Orders (Start Date > End Date)
+Select 
+    * 
+From silver_crm_prd_info
+Where prd_end_dt < prd_start_dt;
+
+
+-- Final Check to the data
+Select * From silver_crm_prd_info;
+
+
+-- ------------------------------------------
+-- Checking 'sliver_crm_sales_details'
+-- ------------------------------------------
+
+-- Check for Invalid Dates
+SELECT 
+    Ifnull (sls_due_dt, 0) AS sls_due_dt 
+From silver_crm_sales_details
+Where sls_due_dt <= 0 
+Or Length(sls_due_dt) != 8 
+Or sls_due_dt > 20500101 
+Or sls_due_dt < 19000101;
+
+
+-- Check for Invalid Date Orders (Order Date > Shipping/Due Dates)
+Select 
+    * 
+From silver_crm_sales_details
+Where sls_order_dt > sls_ship_dt 
+Or sls_order_dt > sls_due_dt;
+
+
+-- Check Data Consistency: Sales = Quantity * Price
+Select Distinct 
+    sls_sales,
+    sls_quantity,
+    sls_price 
+From silver_crm_sales_details
+Where sls_sales != sls_quantity * sls_price
+Or sls_sales IS NULL 
+Or sls_quantity IS NULL 
+Or sls_price IS NULL
+Or sls_sales <= 0 
+Or sls_quantity <= 0 
+Or sls_price <= 0
+Order By sls_sales, sls_quantity, sls_price;
+
+
+-- Final Check to the data
+Select * From silver_crm_sales_details;
+
+
+-- ------------------------------------------
+-- Checking 'silver_erp_cust_az12'
+-- ------------------------------------------
+
+-- Identify Out-of-Range Dates
+Select Distinct
+    bdate 
+From silver_erp_cust_az12
+Where bdate < '1924-01-01' 
+Or bdate > Current_Date();
+
+
+-- Data Standardization & Consistency
+Select Distinct
+    gen 
+From silver_erp_cust_az12;
+
+
+-- Final Check to the data
+Select * From silver_erp_cust_az12;
+
+
+--- ------------------------------------------
+-- Checking 'silver_erp_loc_a101'
+-- ------------------------------------------
+
+-- Data Standardization & Consistency
+Select Distinct
+    cntry 
+From silver_erp_loc_a101
+Order By cntry;
+
+
+-- Final Check to the data
+Select * From silver_erp_loc_a101;
+
+
+--- ------------------------------------------
+-- Checking 'silver_erp_loc_a101'
+-- ------------------------------------------
+
+-- Check for Unwanted Spaces
+Select
+    * 
+FROM silver_erp_px_cat_g1v2
+WHERE cat != TRIM(cat) 
+Or subcat != TRIM(subcat) 
+Or mantainance != TRIM(mantainance);
+
+-- Data Standardization & Consistency
+Select Distinct 
+    mantainance 
+FROM silver_erp_px_cat_g1v2;
+
+
+-- Final Check to the data
+Select * From silver_erp_px_cat_g1v2;
