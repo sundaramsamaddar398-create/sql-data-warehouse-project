@@ -1,0 +1,300 @@
+/*
+===============================================================================
+Stored Procedure: Load Silver Layer (Bronze -> Silver)
+===============================================================================
+Script Purpose:
+    This stored procedure performs the ETL (Extract, Transform, Load) process to 
+    populate the 'silver' tables from the 'bronze' tables in 'data_warehouse' database.
+	Actions Performed:
+		- Truncates Silver tables.
+		- Inserts transformed and cleansed data from Bronze into Silver tables.
+		
+Parameters:
+    None. 
+	  This stored procedure does not accept any parameters or return any values.
+
+Usage Example:
+    CALL load_silver();
+===============================================================================
+*/
+
+-- Creating Stored Procedure for Silver Layer Data File Load
+CREATE PROCEDURE load_silver()
+BEGIN
+    -- -------------------------------------------------------------------------
+    -- CRM Tables
+    -- -------------------------------------------------------------------------
+
+    -- -------------------------------------------------------------------------
+    SET @load_start = NOW();
+    SELECT @load_start AS load_start_time;
+    -- start time
+
+
+    -- Truncate the previous table for any remaining old data
+    TRUNCATE TABLE silver_crm_cust_info;
+
+    SELECT 'Loading silver_crm_cust_info...' AS status;
+
+    -- Loading the transformed data from bronze layer to silverlayer
+    INSERT INTO silver_crm_cust_info (
+        cst_id,
+        cst_key,
+        cst_firstname,
+        cst_lastname,
+        cst_marital_status,
+        cst_gndr,
+        cst_create_date
+    )
+    -- Data transformed from bronze layer table
+    SELECT 
+        cst_id,
+        cst_key,
+        TRIM (cst_firstname) AS cst_firstname,
+        TRIM (cst_lastname) AS cst_lastname,
+        CASE WHEN UPPER(TRIM(cst_marital_status)) = 'S' THEN 'Single'
+            WHEN UPPER(TRIM(cst_marital_status)) = 'M' THEN 'Married'
+            ELSE 'N/A'
+        END AS cst_marital_status, -- Normalization of marital status
+    CASE WHEN UPPER(TRIM(cst_gndr)) = 'F' THEN 'Female'
+            WHEN UPPER(TRIM(cst_gndr)) = 'M' THEN 'Male'
+            ELSE 'N/A'
+        END AS cst_gndr, -- Normalization of gender
+        cst_create_date 
+    FROM 
+        (
+            SELECT
+                *, 
+                RANK() OVER (PARTITION BY cst_id ORDER BY cst_create_date DESC) AS flag_last
+            FROM bronze_crm_cust_info
+            wHERE cst_id IS NOT NULL
+        ) t
+    WHERE flag_last = 1;
+
+
+    SELECT 'silver_crm_cust_info loaded' AS status,
+        COUNT(*) AS row_count
+    FROM silver_crm_cust_info;
+    -- --------------------------------------------------------------------------
+
+    -- --------------------------------------------------------------------------
+
+    -- Truncate the previous table for any remaining old data
+    TRUNCATE TABLE silver_crm_prd_info;
+
+    SELECT 'Loading silver_crm_prd_info...' AS status;
+
+    -- Loading the transformed data from bronze layer to silverlayer
+    INSERT INTO silver_crm_prd_info (
+        prd_id,
+        cat_id,
+        prd_key,
+        prd_nm,
+        prd_cost,
+        prd_line,
+        prd_start_dt,
+        prd_end_dt
+    )
+    -- Data transformed from bronze layer table
+    SELECT 
+        prd_id,
+        REPLACE(SUBSTRING(TRIM(prd_key), 1, 5), "-", "_") AS cat_id,  -- Category id extracted
+        SUBSTRING(TRIM(prd_key), 7, (LENGTH(TRIM(prd_key)) - 6)) AS prd_key, -- product key extracted
+        prd_nm,
+        IFNULL(prd_cost, 0) AS prd_cost,
+        CASE
+            WHEN UPPER(TRIM(prd_line)) = "R" THEN "Road"
+            WHEN UPPER(TRIM(prd_line)) = "M" THEN "Mountain"
+            WHEN UPPER(TRIM(prd_line)) = "S" THEN "Other Sales"
+            WHEN UPPER(TRIM(prd_line)) = "T" THEN "Touring"
+            Else "N/A"
+        END AS prd_line, -- Normalization of product line
+        DATE_FORMAT(prd_start_dt, '%Y-%m-%d') AS prd_start_dt,
+        DATE_FORMAT(DATE_SUB(next_start_dt, INTERVAL 1 DAY), '%Y-%m-%d') AS prd_end_dt -- Calculate end date as one day before the next start date
+    FROM (
+        SELECT *,
+            LEAD(prd_start_dt) OVER (PARTITION BY prd_key ORDER BY prd_start_dt ASC) AS next_start_dt
+        FROM bronze_crm_prd_info
+    ) t;
+
+
+    SELECT 'silver_crm_prd_info loaded' AS status,
+        COUNT(*) AS row_count
+    FROM silver_crm_prd_info;
+    -- --------------------------------------------------------------------------
+
+    -- --------------------------------------------------------------------------
+
+    -- Truncate the previous table for any remaining old data
+    TRUNCATE TABLE silver_crm_sales_details;
+
+    SELECT 'Loading silver_crm_sales_details...' AS status;
+
+    -- Loading the transformed data from bronze layer to silverlayer
+    INSERT INTO silver_crm_sales_details (
+        sls_ord_num,
+        sls_prd_key,
+        sls_cust_id,
+        sls_order_dt,
+        sls_ship_dt,
+        sls_due_dt,
+        sls_sales,
+        sls_quantity,
+        sls_price
+    )
+    -- Data transformed from bronze layer table
+    SELECT
+        sls_ord_num,
+        sls_prd_key,
+        sls_cust_id,
+        CASE 
+            WHEN sls_order_dt = 0 OR LENGTH(sls_order_dt) != 8 THEN NULL 
+            ELSE STR_TO_DATE(CAST(sls_order_dt AS CHAR), '%Y%m%d')
+        END AS sls_order_dt,
+        CASE 
+            WHEN sls_ship_dt = 0 OR LENGTH(sls_ship_dt) != 8 THEN NULL 
+            ELSE STR_TO_DATE(CAST(sls_ship_dt AS CHAR), '%Y%m%d')
+        END AS sls_ship_dt,
+        CASE 
+            WHEN sls_due_dt = 0 OR LENGTH(sls_due_dt) != 8 THEN NULL 
+            ELSE STR_TO_DATE(CAST(sls_due_dt AS CHAR), '%Y%m%d')
+        END AS sls_due_dt,
+        CASE 
+            WHEN sls_sales IS NULL OR sls_sales <= 0 OR sls_sales != sls_quantity * ABS(sls_price) THEN sls_quantity * ABS(sls_price)
+            ELSE sls_sales
+        END AS sls_sales, -- Recalculate sales if original value is missing or incorrect
+        sls_quantity,
+        CASE 
+            WHEN sls_price IS NULL OR sls_price <= 0 THEN sls_sales / IFNULL(sls_quantity, 0)
+            ELSE sls_price  -- Derive price if original value is invalid
+        END AS sls_price
+    FROM bronze_crm_sales_details;
+
+
+    SELECT 'silver_crm_sales_details loaded' AS status,
+        COUNT(*) AS row_count
+    FROM silver_crm_sales_details;
+    -- -------------------------------------------------------------------------------
+
+
+    -- -------------------------------------------------------------------------------
+    -- ERP Tables
+    -- -------------------------------------------------------------------------------
+
+
+    -- -------------------------------------------------------------------------------
+
+    -- Truncate the previous table for any remaining old data
+    TRUNCATE TABLE silver_erp_cust_az12;
+
+    SELECT 'Loading silver_erp_cust_az12...' AS status;
+
+    -- Loading the transformed data from bronze layer to silverlayer
+    INSERT INTO silver_erp_cust_az12 (
+        cid,
+        bdate,
+        gen
+    )
+    -- Data transformed from bronze layer table
+    SELECT
+        CASE
+            WHEN TRIM(cid) LIKE "NAS%" THEN SUBSTRING(cid, 4, (LENGTH(cid) - 3))
+            ELSE TRIM(cid)
+        END AS cid, -- Remove 'NAS' prefix if present
+        CASE
+            WHEN bdate > CURRENT_DATE() THEN NULL
+            ELSE bdate 
+        END AS bdate, -- Set future birthdates to NULL
+        CASE
+            WHEN gen IS NULL THEN 'N/A'
+            WHEN UPPER(TRIM(gen)) LIKE 'F%' THEN 'Female'
+            WHEN UPPER(TRIM(gen)) LIKE 'M%' THEN 'Male'
+            ELSE 'N/A'
+        END AS gen -- Normalize gender values and handle unknown cases
+    FROM bronze_erp_cust_az12;
+
+
+    SELECT 'silver_erp_cust_az12 loaded' AS status,
+        COUNT(*) AS row_count
+    FROM silver_erp_cust_az12;
+    -- --------------------------------------------------------------------------
+
+    -- --------------------------------------------------------------------------
+
+    -- Truncate the previous table for any remaining old data
+    TRUNCATE TABLE silver_erp_loc_a101;
+
+    SELECT 'Loading silver_erp_loc_a101...' AS status;
+
+    -- Loading the transformed data from bronze layer to silverlayer
+    INSERT INTO silver_erp_loc_a101 (
+        cid,
+        cntry
+    )
+    -- Data transformed from bronze layer table
+    SELECT
+        REPLACE(cid, "-", "") As cid,
+        CASE 
+            WHEN cntry IS NULL OR TRIM(cntry) = '' THEN 'N/A'
+            WHEN UPPER(TRIM(cntry)) LIKE 'DE%' THEN 'Denmark'
+            WHEN UPPER(TRIM(cntry)) LIKE 'US%' THEN 'United States'
+            ELSE TRIM(cntry)
+        END AS cntry -- Normalize and Handle missing or blank country codes
+    FROM bronze_erp_loc_a101;
+
+
+    SELECT 'silver_erp_loc_a101 loaded' AS status,
+        COUNT(*) AS row_count
+    FROM silver_erp_loc_a101;
+    -- --------------------------------------------------------------------------
+
+    -- --------------------------------------------------------------------------
+
+    -- Truncate the previous table for any remaining old data
+    TRUNCATE TABLE silver_erp_px_cat_g1v2;
+
+    SELECT 'Loading silver_px_cat_g1v2...' AS status;
+
+    -- Loading the transformed data from bronze layer to silverlayer
+    INSERT INTO silver_erp_px_cat_g1v2 (
+        id,
+        cat,
+        subcat,
+        mantainance
+    )
+    -- Data transformed from bronze layer table
+    SELECT
+        id,
+        cat,
+        subcat,
+        mantainance
+    FROM bronze_erp_px_cat_g1v2; 
+
+
+    SELECT 'silver_erp_px_cat_g1v2 loaded' AS status,
+        COUNT(*) AS row_count
+    FROM silver_erp_px_cat_g1v2;
+    -- -----------------------------------------------------------------------------------
+
+    SET @load_end = NOW();
+    SELECT @load_end AS load_end_time;
+    -- End time
+
+    SELECT CONCAT("Duration:", TIMESTAMPDIFF(SECOND, @load_start, @load_end), "Seconds");
+
+    SELECT 'silver_crm_cust_info' AS table_name, COUNT(*) AS `rows` FROM silver_crm_cust_info
+    UNION ALL
+    SELECT 'silver_crm_prd_info', COUNT(*) AS `rows` FROM silver_crm_prd_info
+    UNION ALL
+    SELECT 'silver_crm_sales_details', COUNT(*) AS `rows` FROM silver_crm_sales_details
+    UNION ALL
+    SELECT 'silver_erp_cust_az12', COUNT(*) AS `rows` FROM silver_erp_CUST_AZ12
+    UNION ALL
+    SELECT 'silver_erp_loc_a101', COUNT(*) AS `rows` FROM silver_erp_LOC_A101
+    UNION ALL
+    SELECT 'silver_erp_px_cat_g1v2', COUNT(*) AS `rows` FROM silver_erp_PX_CAT_G1V2;
+-- Ending of stored procedure
+END;
+
+
+CALL load_silver()
