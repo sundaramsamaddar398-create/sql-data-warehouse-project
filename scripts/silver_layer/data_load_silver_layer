@@ -232,16 +232,16 @@ BEGIN
         cntry
     )
     -- Data transformed from bronze layer table
-    SELECT
-        REPLACE(cid, "-", "") As cid,
+    SELECT 
+        REPLACE(cid, "-", "") AS cid,
         CASE 
-            WHEN cntry IS NULL OR TRIM(cntry) = '' THEN 'N/A'
-            WHEN UPPER(TRIM(cntry)) LIKE 'DE%' THEN 'Denmark'
-            WHEN UPPER(TRIM(cntry)) LIKE 'US%' THEN 'United States'
-            ELSE TRIM(cntry)
-        END AS cntry -- Normalize and Handle missing or blank country codes
-    FROM bronze_erp_loc_a101;
-
+            WHEN cntry IS NULL OR TRIM(REPLACE(cntry, '\r', '')) = '' THEN 'N/A'
+            WHEN UPPER(TRIM(REPLACE(cntry, '\r', ''))) IN ('US', 'USA') THEN 'United States'
+            WHEN UPPER(TRIM(REPLACE(cntry, '\r', ''))) = 'DE' THEN 'Denmark'
+            ELSE TRIM(REPLACE(cntry, '\r', ''))
+        END AS cntry
+    FROM bronze_erp_loc_a101; -- Normalize and Handle missing or blank country codes
+    
 
     SELECT 'silver_erp_loc_a101 loaded' AS status,
         COUNT(*) AS row_count
