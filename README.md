@@ -65,6 +65,6 @@ Develop SQL-based analytics to deliver detailed insights into:
 - **Product Performance**
 - **Sales Trends**
 
-These insights empower stakeholders with key business metrics, enabling strategic decision-making.  
+These insights empower stakeholders with key business metrics, enabling strategic decision-making. Check the link for the Analytics and Reporting: https://github.com/sundaramsamaddar398-create/sql-data-exploratory-and-analytics-project
 
 
